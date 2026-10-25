@@ -67,8 +67,20 @@ def is_likely_id_string(secret: str, line: str, plugin: Optional[BasePlugin] = N
     except ValueError:
         return False
 
-    return (not plugin or not isinstance(plugin, RegexBasedDetector)) \
-        and bool(_get_id_detector_regex().search(line, pos=0, endpos=index))
+    return (not plugin or not isinstance(plugin, RegexBasedDetector)) and (
+        bool(_get_id_detector_regex().search(line, pos=0, endpos=index))
+        or bool(_get_camel_case_id_detector_regex().search(line, pos=0, endpos=index))
+    )
+
+
+@lru_cache(maxsize=1)
+def _get_camel_case_id_detector_regex() -> Pattern:
+    """
+    Matches camelCase identifiers (e.g. `someIdHere`), which are often
+    identifiers rather than secrets. Case-sensitive on purpose: the lower-case
+    letter before `Id` and the upper-case letter after it carry the meaning.
+    """
+    return re.compile(r'[a-z]Id[A-Z]')
 
 
 @lru_cache(maxsize=1)
@@ -215,23 +227,3 @@ def is_lock_file(filename: str) -> bool:
         'Cargo.lock',
         'packages.lock.json',
     }
-
-
-def is_not_alphanumeric_string(secret: str) -> bool:
-    """
-    This assumes that secrets should have at least ONE letter in them.
-    This helps avoid clear false positives, like `*****`.
-    """
-    return not bool(set(string.ascii_letters) & set(secret))
-
-
-def is_swagger_file(filename: str) -> bool:
-    """
-    Filters swagger files and paths, like swagger-ui.html or /swagger/.
-    """
-    return bool(_get_swagger_regex().search(filename))
-
-
-@lru_cache(maxsize=1)
-def _get_swagger_regex() -> Pattern:
-    return re.compile(r'.*swagger.*')
