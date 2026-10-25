@@ -227,3 +227,23 @@ def is_lock_file(filename: str) -> bool:
         'Cargo.lock',
         'packages.lock.json',
     }
+
+
+def is_not_alphanumeric_string(secret: str) -> bool:
+    """
+    This assumes that secrets should have at least ONE letter in them.
+    This helps avoid clear false positives, like `*****`.
+    """
+    return not bool(set(string.ascii_letters) & set(secret))
+
+
+def is_swagger_file(filename: str) -> bool:
+    """
+    Filters swagger files and paths, like swagger-ui.html or /swagger/.
+    """
+    return bool(_get_swagger_regex().search(filename))
+
+
+@lru_cache(maxsize=1)
+def _get_swagger_regex() -> Pattern:
+    return re.compile(r'.*swagger.*')

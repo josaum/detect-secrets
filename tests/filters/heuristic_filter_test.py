@@ -54,6 +54,62 @@ def test_is_potential_uuid(secret):
     assert filters.heuristic.is_potential_uuid(secret)
 
 
+class TestIsLikelyIdString:
+    @pytest.mark.parametrize(
+        'secret, line',
+        [
+            ('RANDOM_STRING', 'id: RANDOM_STRING'),
+            ('RANDOM_STRING', 'id=RANDOM_STRING'),
+            ('RANDOM_STRING', 'id = RANDOM_STRING'),
+            ('RANDOM_STRING', 'myid: RANDOM_STRING'),
+            ('RANDOM_STRING', 'myid=RANDOM_STRING'),
+            ('RANDOM_STRING', 'myid = RANDOM_STRING'),
+            ('RANDOM_STRING', 'userid: RANDOM_STRING'),
+            ('RANDOM_STRING', 'userid=RANDOM_STRING'),
+            ('RANDOM_STRING', 'userid = RANDOM_STRING'),
+            ('RANDOM_STRING', 'data test_id: RANDOM_STRING'),
+            ('RANDOM_STRING', 'data test_id=RANDOM_STRING'),
+            ('RANDOM_STRING', 'data test_id = RANDOM_STRING'),
+            ('RANDOM_STRING', 'ids = RANDOM_STRING, RANDOM_STRING'),
+            ('RANDOM_STRING', 'my_ids: RANDOM_STRING, RANDOM_STRING'),
+            # camelCase identifiers should be treated as ids, not secrets (#262)
+            ('RANDOM_STRING', 'val someIdHere = "RANDOM_STRING"'),
+            (
+                'f10cba071b66829c5d5a2fb33cfa3f53R121',
+                'val someIdHere = "f10cba071b66829c5d5a2fb33cfa3f53R121"',
+            ),
+        ],
+    )
+    def test_success(self, secret, line):
+        assert filters.heuristic.is_likely_id_string(secret, line)
+
+    @pytest.mark.parametrize(
+        'secret, line, plugin',
+        [
+            # the word hidden has the word id in it, but lets
+            # not mark that as an id string
+            ('RANDOM_STRING', 'hidden_secret: RANDOM_STRING', None),
+            ('RANDOM_STRING', 'hidden_secret=RANDOM_STRING', None),
+            ('RANDOM_STRING', 'hidden_secret = RANDOM_STRING', None),
+
+            # fail silently if the secret isn't even on the line
+            ('SOME_RANDOM_STRING', 'id: SOME_OTHER_RANDOM_STRING', None),
+
+            # fail although the word david ends in id
+            ('RANDOM_STRING', 'postgres://david:RANDOM_STRING', None),
+
+            # fail since this is an aws access key id, a real secret
+            ('AKIA4NACSIJMDDNSEDTE', 'aws_access_key_id=AKIA4NACSIJMDDNSEDTE', AWSKeyDetector()),
+
+            # not a camelCase id (lower-case i), and a different variable name
+            ('RANDOM_STRING', 'val someidHere = "RANDOM_STRING"', None),
+            ('RANDOM_STRING', 'val someOtherValue = "RANDOM_STRING"', None),
+        ],
+    )
+    def test_failure(self, secret, line, plugin):
+        assert not filters.heuristic.is_likely_id_string(secret, line, plugin)
+
+
 @pytest.mark.parametrize(
     'line, result',
     (
@@ -132,59 +188,3 @@ def test_is_not_alphanumeric_string(secret, result):
 )
 def test_is_swagger_file(filename, result):
     assert filters.heuristic.is_swagger_file(filename.format(sep=os.path.sep)) is result
-
-
-class TestIsLikelyIdString:
-    @pytest.mark.parametrize(
-        'secret, line',
-        [
-            ('RANDOM_STRING', 'id: RANDOM_STRING'),
-            ('RANDOM_STRING', 'id=RANDOM_STRING'),
-            ('RANDOM_STRING', 'id = RANDOM_STRING'),
-            ('RANDOM_STRING', 'myid: RANDOM_STRING'),
-            ('RANDOM_STRING', 'myid=RANDOM_STRING'),
-            ('RANDOM_STRING', 'myid = RANDOM_STRING'),
-            ('RANDOM_STRING', 'userid: RANDOM_STRING'),
-            ('RANDOM_STRING', 'userid=RANDOM_STRING'),
-            ('RANDOM_STRING', 'userid = RANDOM_STRING'),
-            ('RANDOM_STRING', 'data test_id: RANDOM_STRING'),
-            ('RANDOM_STRING', 'data test_id=RANDOM_STRING'),
-            ('RANDOM_STRING', 'data test_id = RANDOM_STRING'),
-            ('RANDOM_STRING', 'ids = RANDOM_STRING, RANDOM_STRING'),
-            ('RANDOM_STRING', 'my_ids: RANDOM_STRING, RANDOM_STRING'),
-            # camelCase identifiers should be treated as ids, not secrets (#262)
-            ('RANDOM_STRING', 'val someIdHere = "RANDOM_STRING"'),
-            (
-                'f10cba071b66829c5d5a2fb33cfa3f53R121',
-                'val someIdHere = "f10cba071b66829c5d5a2fb33cfa3f53R121"',
-            ),
-        ],
-    )
-    def test_success(self, secret, line):
-        assert filters.heuristic.is_likely_id_string(secret, line)
-
-    @pytest.mark.parametrize(
-        'secret, line, plugin',
-        [
-            # the word hidden has the word id in it, but lets
-            # not mark that as an id string
-            ('RANDOM_STRING', 'hidden_secret: RANDOM_STRING', None),
-            ('RANDOM_STRING', 'hidden_secret=RANDOM_STRING', None),
-            ('RANDOM_STRING', 'hidden_secret = RANDOM_STRING', None),
-
-            # fail silently if the secret isn't even on the line
-            ('SOME_RANDOM_STRING', 'id: SOME_OTHER_RANDOM_STRING', None),
-
-            # fail although the word david ends in id
-            ('RANDOM_STRING', 'postgres://david:RANDOM_STRING', None),
-
-            # fail since this is an aws access key id, a real secret
-            ('AKIA4NACSIJMDDNSEDTE', 'aws_access_key_id=AKIA4NACSIJMDDNSEDTE', AWSKeyDetector()),
-
-            # not a camelCase id (lower-case i), and a different variable name
-            ('RANDOM_STRING', 'val someidHere = "RANDOM_STRING"', None),
-            ('RANDOM_STRING', 'val someOtherValue = "RANDOM_STRING"', None),
-        ],
-    )
-    def test_failure(self, secret, line, plugin):
-        assert not filters.heuristic.is_likely_id_string(secret, line, plugin)
